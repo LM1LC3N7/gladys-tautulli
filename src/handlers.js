@@ -27,12 +27,16 @@ export function registerHandlers(gladys, app, logger) {
   // --- Connection lifecycle: (re)start on every connection (everything is
   // published again), pause while Gladys is away. A refused key and a pause
   // are kept in /data: a reconnection does not lift them.
-  gladys.on('connected', async () => {
+  // The configuration unreadable (Gladys still starting): tried again in a
+  // moment, never left without a timer (cleared by a disconnection).
+  const startFromGladys = async () => {
     try {
       await app.start(await gladys.getConfig());
     } catch (err) {
       logger?.error(`Start failed: ${app.describe(err)}`);
+      app.retryStart(startFromGladys);
     }
-  });
+  };
+  gladys.on('connected', startFromGladys);
   gladys.on('disconnected', () => app.stop());
 }

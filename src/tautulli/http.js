@@ -4,9 +4,10 @@
 // the body, no redirect followed. Resolves { status, headers, body } for any
 // status; rejects a TautulliError for the transport failures.
 //
-// The API key of Tautulli travels in the query string of the URL (the only
-// way its API takes it): nothing here ever puts the URL, nor a message of
-// Node that could quote it, in an error.
+// The API key of Tautulli travels in the query string of the URL (the one
+// way every version of its API takes it; the X-Api-Key header exists only
+// since 2.18.0): nothing here ever puts the URL, nor a message of Node that
+// could quote it, in an error.
 //
 // TLS: by default the certificate must be valid for the host name (a public
 // or system authority). Two ways to accept a self-signed certificate:

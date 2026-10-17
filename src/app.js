@@ -76,6 +76,8 @@ export class TautulliApp {
     this.epoch = 0;
     this.handles = new Set();
     this.queue = Promise.resolve();
+    /** The readings, one after the other (the loop, the scan button, a start). */
+    this.reading = Promise.resolve();
     this.lastStatus = null;
     this.reset();
   }
@@ -163,31 +165,24 @@ export class TautulliApp {
     const config = normalizeConfig(rawConfig);
     this.config = config;
     this.reset();
-    // Gladys may have restarted (a reconnection): every value goes again.
+    // Gladys may have restarted (a reconnection): every value, the badges and
+    // the connection status go again (the core keeps the status in memory).
     this.gladys.forgetPublishedStates?.();
+    this.lastStatus = null;
     await this.store.load();
 
+    let problem = null;
     if (config.urlError) {
-      const message = { empty: T.status.urlEmpty, credentials: T.status.urlCredentials }[
-        config.urlError
-      ];
-      await this.setStatus(false, message ?? T.status.urlInvalid);
-      return;
-    }
-    if (!config.apiKey) {
-      await this.setStatus(false, T.status.missingKey);
-      return;
-    }
-    if (config.apiKeyInvalid) {
-      await this.setStatus(false, T.status.keyInvalid);
-      return;
-    }
-    if (config.fingerprintInvalid) {
-      await this.setStatus(false, T.status.fingerprintInvalid);
-      return;
-    }
-    if (config.tlsOverHttp) {
-      await this.setStatus(false, T.status.tlsOverHttp);
+      problem =
+        { empty: T.status.urlEmpty, credentials: T.status.urlCredentials }[config.urlError] ??
+        T.status.urlInvalid;
+    } else if (!config.apiKey) problem = T.status.missingKey;
+    else if (config.apiKeyInvalid) problem = T.status.keyInvalid;
+    else if (config.fingerprintInvalid) problem = T.status.fingerprintInvalid;
+    else if (config.tlsOverHttp) problem = T.status.tlsOverHttp;
+    if (problem) {
+      await this.publishTransports();
+      await this.setStatus(false, problem);
       return;
     }
     // A key Tautulli refused with these very values is not tried again alone.
@@ -196,6 +191,7 @@ export class TautulliApp {
     if (refused && refused === (await this.refusalKey(config)) && !force) {
       this.blocked = true;
       this.logger.warn('API key refused earlier: not tried again');
+      await this.publishTransports();
       await this.setStatus(false, T.status.keyRefused);
       return;
     }
@@ -242,6 +238,12 @@ export class TautulliApp {
     }, delay);
     this.handles.add(handle);
     return handle;
+  }
+
+  /** A start that failed before reaching Tautulli (the configuration unreadable): again later. */
+  retryStart(task) {
+    this.halt();
+    this.schedule(INTERVALS.RETRY_MIN_MS, task);
   }
 
   /** Schedule one step of the loop of the current epoch. */
@@ -370,7 +372,15 @@ export class TautulliApp {
    * activity fails (except "Plex not read", which is a reading), or when
    * the users meet an HTTP 429 (after the activity is published).
    */
-  async refresh({ publish, forceUsers = false }) {
+  refresh(options) {
+    // Serialized: two readings in parallel (a scan during the loop) would
+    // compare the sessions with a stale base and fire ghost events.
+    const run = this.reading.then(() => this.readOnce(options));
+    this.reading = run.catch(() => {});
+    return run;
+  }
+
+  async readOnce({ publish, forceUsers = false }) {
     const client = this.client;
     if (!client) return;
     let activity = null;
@@ -520,6 +530,9 @@ export class TautulliApp {
     }
     if (this.sessions) {
       for (const { userId } of created.users) {
+        // Only the users followed now (10 at most): a device of a user no
+        // longer in the filter keeps its last values, nothing more.
+        if (!this.followed.has(userId)) continue;
         const ids = userIds(this.gladys, userId);
         const { streams, title } = userState(this.sessions, userId);
         states.push(
@@ -566,7 +579,11 @@ export class TautulliApp {
 
   async deviceCreated(device) {
     const parsed = parseExternalId(this.gladys, device?.external_id);
-    if (!parsed || !this.online) return;
+    if (!parsed) return;
+    if (!this.online) {
+      await this.publishTransports(); // its badge says "unreachable"
+      return;
+    }
     await this.publishStates();
     await this.publishTransports();
   }

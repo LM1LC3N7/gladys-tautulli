@@ -2,9 +2,11 @@
 // The API v2 of Tautulli, read only:
 //   GET /api/v2?apikey=<key>&cmd=get_activity     streams, bandwidth, sessions
 //   GET /api/v2?apikey=<key>&cmd=get_users        the Plex users (names)
-// The API key goes in the query string: the only way the API of Tautulli
-// takes it. The URL is built here and handed to the transport only; it never
-// reaches an error, a status nor a log.
+// The API key goes in the query string: the one way every version of
+// Tautulli takes it (the X-Api-Key header exists only since 2.18.0, see
+// TODO.md). The URL is built here and handed to the transport only; it never
+// reaches an error, a status nor a log of this integration (a reverse proxy
+// in front of Tautulli may log it: documented).
 // -----------------------------------------------------------------------------
 
 import { MAX_BYTES, TIMEOUTS } from '../constants.js';
@@ -94,28 +96,37 @@ export class TautulliClient {
     } catch {
       json = null;
     }
+    const { status } = response;
     const envelope = parseEnvelope(json);
-    if (response.status === 401 || envelope?.reason === 'key') {
-      throw new TautulliError(CODES.KEY_REFUSED, 'API key refused', {
-        status: response.status,
-        command,
-      });
-    }
-    if (response.status < 200 || response.status > 299) {
-      throw new TautulliError(CODES.HTTP, `HTTP ${response.status}`, {
-        status: response.status,
+    const httpError = () =>
+      new TautulliError(CODES.HTTP, `HTTP ${status}`, {
+        status,
         retryAfterMs: retryAfterMs(response.headers?.['retry-after']),
         command,
       });
+    // The order matters: Tautulli (plexpy/api2.py) answers its own errors
+    // with an envelope AND a status: 401 for the key, 404 for the API off,
+    // 400 for a command that failed, 500 for an exception.
+    if (status === 401 || envelope?.reason === 'key') {
+      throw new TautulliError(CODES.KEY_REFUSED, 'API key refused', { status, command });
     }
+    if (status === 429 || status >= 500) throw httpError(); // a pause of every path
+    const ok = status >= 200 && status <= 299;
     if (!envelope) {
+      if (!ok) throw httpError();
       throw new TautulliError(CODES.BAD_ANSWER, 'Not an answer of Tautulli', { command });
     }
     if (envelope.reason === 'disabled') {
-      throw new TautulliError(CODES.API_DISABLED, 'The API of Tautulli is off', { command });
+      throw new TautulliError(CODES.API_DISABLED, 'The API of Tautulli is off', {
+        status,
+        command,
+      });
     }
-    if (!envelope.ok) {
-      throw new TautulliError(CODES.REMOTE_ERROR, `${command} failed in Tautulli`, { command });
+    if (!ok || !envelope.ok) {
+      throw new TautulliError(CODES.REMOTE_ERROR, `${command} failed in Tautulli`, {
+        status,
+        command,
+      });
     }
     return envelope.data;
   }

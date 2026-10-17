@@ -33,7 +33,7 @@ test('numbers: as Tautulli gives them (text or number), bounded, else unknown', 
 });
 
 test('text: one line, no control character, bounded', () => {
-  assert.equal(cleanText('  a\nb‮ c  '), 'a b c');
+  assert.equal(cleanText('  a\nb\u202e c  '), 'a b c');
   assert.equal(cleanText(null), '');
   assert.equal(cleanText('x'.repeat(300)).length, 200);
   assert.ok(cleanText('x'.repeat(300)).endsWith('…'));

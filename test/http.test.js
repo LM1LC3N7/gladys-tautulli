@@ -198,6 +198,25 @@ test('the client over the real transport: the key in the query only, errors with
     }
     fake.plexDown = true;
     await assert.rejects(client.activity(), (err) => err.code === CODES.REMOTE_ERROR && clean(err));
+    fake.plexDown = false;
+    fake.failures.push({
+      status: 400,
+      body: { response: { result: 'error', message: 'Boom', data: null } },
+    });
+    await assert.rejects(
+      client.activity(),
+      (err) => err.code === CODES.REMOTE_ERROR && err.status === 400 && clean(err),
+    );
+    fake.apiEnabled = false;
+    await assert.rejects(client.activity(), (err) => err.code === CODES.API_DISABLED);
+    fake.apiEnabled = true;
+    fake.failures.push({ status: 404, body: '<html>' });
+    await assert.rejects(client.activity(), (err) => err.code === CODES.HTTP && err.status === 404);
+    fake.failures.push({
+      status: 500,
+      body: { response: { result: 'error', message: 'Exception', data: null } },
+    });
+    await assert.rejects(client.activity(), (err) => err.code === CODES.HTTP && err.status === 500);
     fake.failures.push({ status: 503, headers: { 'retry-after': '120' } });
     await assert.rejects(
       client.activity(),

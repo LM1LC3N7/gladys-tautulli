@@ -79,9 +79,13 @@ un certificat auto-signé :
 
 ## Sécurité et vie privée
 
-- L'API de Tautulli prend la clé **dans l'URL** de chaque requête.
-  L'intégration n'écrit jamais d'URL, la clé ni un message de Tautulli dans
-  ses journaux. En `http://` la clé traverse votre réseau en clair : gardez
+- L'intégration envoie la clé **dans l'URL** de chaque requête
+  (`?apikey=`) : la méthode acceptée par toutes les versions de Tautulli
+  (l'en-tête `X-Api-Key` n'existe que depuis Tautulli 2.18.0 ; son usage est
+  prévu). L'intégration n'écrit jamais d'URL, la clé ni un message de
+  Tautulli dans ses journaux, mais un **proxy inverse** devant Tautulli peut
+  journaliser les URL, clé comprise : joignez Tautulli directement, ou coupez
+  les journaux d'accès du proxy pour `/api/v2`. En `http://` la clé traverse votre réseau en clair : gardez
   Tautulli sur votre réseau local, ou utilisez https.
 - La clé donne tout l'accès à l'API de Tautulli (qui sait aussi couper des
   flux) : l'intégration n'utilise que `get_activity` et `get_users`.

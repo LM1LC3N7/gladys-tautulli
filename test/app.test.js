@@ -236,11 +236,49 @@ test('"Invalid apikey" in an HTTP 200 answer is a refusal too; "API not enabled"
   assert.match(gladys.fake.connectionStatus.message.en, /refused the API key/);
   assert.deepEqual(timers.delays(), []);
 
+  // API off: HTTP 404 with an envelope (plexpy/api2.py).
   const other = createFakeTautulli();
   other.apiEnabled = false;
   const second = await setup({ tautulli: other });
   assert.match(second.gladys.fake.connectionStatus.message.en, /API of Tautulli is off/);
   assert.deepEqual(second.timers.delays(), [INTERVALS.RETRY_MIN_MS]);
+});
+
+test('the 401 of Tautulli >= 2.18 ("…or X-Api-Key header is required") is a refusal', async () => {
+  const tautulli = createFakeTautulli();
+  tautulli.failures.push({
+    cmd: 'get_activity',
+    status: 401,
+    body: {
+      response: {
+        result: 'error',
+        message: 'Parameter apikey is required or X-Api-Key header is required',
+        data: null,
+      },
+    },
+  });
+  const { gladys, timers } = await setup({ tautulli });
+  assert.match(gladys.fake.connectionStatus.message.en, /refused the API key/);
+  assert.deepEqual(timers.delays(), []);
+});
+
+test('HTTP 400 with result:error is a failed command (Plex not read), never "not Tautulli"', async () => {
+  const tautulli = createFakeTautulli();
+  tautulli.failures.push({
+    cmd: 'get_activity',
+    status: 400,
+    body: { response: { result: 'error', message: 'Unable to get PMS activity', data: null } },
+  });
+  const { gladys, timers } = await setup({ tautulli });
+  assert.equal(gladys.fake.connectionStatus.connected, true);
+  assert.match(gladys.fake.connectionStatus.message.en, /cannot read the activity of Plex/);
+  assert.equal(last(gladys, SERVER, 'plex_reachable'), 0);
+  assert.deepEqual(timers.delays(), [30_000]);
+  // A 404 without an envelope: not Tautulli (a wrong path or port).
+  const other = createFakeTautulli();
+  other.failures.push({ cmd: 'get_activity', status: 404, body: '<html>' });
+  const second = await setup({ tautulli: other });
+  assert.match(second.gladys.fake.connectionStatus.message.en, /does not answer like Tautulli/);
 });
 
 test('HTTP 429: a pause (Retry-After, bounded), kept across a restart; the test button lifts it', async () => {
@@ -362,10 +400,84 @@ test('a reconnection to Gladys publishes everything again', async () => {
   const { gladys } = await setup();
   const states = gladys.fake.states.length;
   const transports = gladys.fake.transports.length;
+  const statuses = gladys.fake.connectionStatuses.length;
   await gladys.disconnect();
   await gladys.connect();
   assert.ok(gladys.fake.states.length >= states * 2, 'states again');
   assert.equal(gladys.fake.transports.length, transports * 2, 'badges again');
+  // Gladys restarted: it keeps the status in memory only, so it goes again.
+  assert.equal(gladys.fake.connectionStatuses.length, statuses + 1, 'status again');
+  assert.equal(gladys.fake.connectionStatus.connected, true);
+});
+
+test('a refused key: its status is republished after a reconnection too', async () => {
+  const { gladys } = await setup({ config: { api_key: 'f'.repeat(32) } });
+  const statuses = gladys.fake.connectionStatuses.length;
+  await gladys.disconnect();
+  await gladys.connect();
+  assert.equal(gladys.fake.connectionStatuses.length, statuses + 1);
+  assert.match(gladys.fake.connectionStatus.message.en, /refused the API key/);
+});
+
+test('the configuration unreadable at the connection: retried by a timer', async () => {
+  const tautulli = createFakeTautulli();
+  const gladys = createFakeGladys({ selector: SELECTOR, config: BASE_CONFIG, devices: [SERVER] });
+  const timers = createFakeTimers();
+  const { logger } = makeLogger();
+  const app = new TautulliApp({
+    gladys,
+    logger,
+    request: tautulli.request,
+    dataDir: mkdtempSync(join(tmpdir(), 'tautulli-app-')),
+    now: () => T0,
+    timers,
+  });
+  running = app;
+  registerHandlers(gladys, app, logger);
+  const getConfig = gladys.getConfig.bind(gladys);
+  // The SDK's own connect() reads it first; the handler's read fails.
+  let calls = 0;
+  let fail = true;
+  gladys.getConfig = async () => {
+    calls += 1;
+    if (fail && calls > 1) throw new Error('Gladys not ready');
+    return getConfig();
+  };
+  await gladys.connect();
+  assert.deepEqual(timers.delays(), [INTERVALS.RETRY_MIN_MS]);
+  assert.equal(tautulli.requests.length, 0);
+  fail = false;
+  await timers.run();
+  assert.equal(gladys.fake.connectionStatus.connected, true);
+});
+
+test('a user removed from the filter: its device gets nothing more', async () => {
+  const { gladys, tautulli, timers } = await setup({ config: { users: 'alice' } });
+  const bobStates = () =>
+    gladys.fake.states.filter((s) => s.device_feature_external_id.startsWith(BOB.external_id));
+  assert.deepEqual(bobStates(), [], 'Bob is not followed');
+  tautulli.sessions[1].full_title = 'Another';
+  await poll(timers);
+  assert.deepEqual(bobStates(), []);
+  assert.equal(last(gladys, ALICE, 'streams'), 1);
+});
+
+test('a scan during a reading: readings serialized, no ghost event', async () => {
+  const { gladys, tautulli, timers } = await setup();
+  tautulli.sessions[0].state = 'paused';
+  await Promise.all([poll(timers), gladys.fake.scanRequest()]);
+  assert.deepEqual(events(gladys), [['paused', 'Alice']], 'one pause, fired once');
+});
+
+test('a device created while Tautulli is unreachable gets its badge', async () => {
+  const tautulli = createFakeTautulli();
+  tautulli.unreachable = true;
+  const { gladys } = await setup({ tautulli, created: [] });
+  await gladys.fake.deviceCreated(SERVER);
+  assert.deepEqual(gladys.fake.transports.at(-1), {
+    device_external_id: SERVER.external_id,
+    transport: 'unreachable',
+  });
 });
 
 test('badges go in calls of 100', async () => {
@@ -401,7 +513,7 @@ test('the configuration: what is wrong is said, nothing is sent', async () => {
     [{ url: 'http://h:8181/api/v2?apikey=x&cmd=get_activity' }, /without \?apikey/],
     [{ url: 'http://u:p@h' }, /Remove the user name/],
     [{ api_key: '' }, /Type the API key/],
-    [{ api_key: 'abc​def0123456789' }, /invisible character/],
+    [{ api_key: 'abc\u200bdef0123456789' }, /invisible character/],
     [{ certificate_fingerprint: 'nope', url: 'https://h' }, /SHA-256/],
     [{ allow_self_signed: true }, /only apply to https/],
   ];
@@ -410,6 +522,11 @@ test('the configuration: what is wrong is said, nothing is sent', async () => {
     const { gladys } = await setup({ tautulli, config });
     assert.match(gladys.fake.connectionStatus.message.en, pattern, JSON.stringify(config));
     assert.equal(tautulli.requests.length, 0);
+    assert.ok(
+      gladys.fake.transports.length === 4 &&
+        gladys.fake.transports.every((t) => t.transport === 'unreachable'),
+      'badges say unreachable',
+    );
     await running.stop();
   }
 });

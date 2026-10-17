@@ -47,8 +47,8 @@
       "type": "secret",
       "label": { "en": "API key", "fr": "Clé d'API" },
       "description": {
-        "en": "In Tautulli: Settings, Web Interface, API (tick \"Enable API\"). Kept by Gladys in its database, never shown again, sent only to Tautulli (in the query of each request, as its API requires); never written in a log.",
-        "fr": "Dans Tautulli : Settings, Web Interface, API (cochez « Enable API »). Gardée par Gladys dans sa base, jamais réaffichée, envoyée seulement à Tautulli (dans la requête, comme son API l'exige) ; jamais écrite dans un journal."
+        "en": "In Tautulli: Settings, Web Interface, API (tick \"Enable API\"). Kept by Gladys in its database, never shown again, sent only to Tautulli, in the query of each request (the one method every Tautulli version accepts; the X-Api-Key header exists only since 2.18.0); never written in a log of Gladys, but a reverse proxy in front of Tautulli may log URLs.",
+        "fr": "Dans Tautulli : Settings, Web Interface, API (cochez « Enable API »). Gardée par Gladys dans sa base, jamais réaffichée, envoyée seulement à Tautulli, dans l'URL de chaque requête (la méthode acceptée par toutes les versions de Tautulli ; l'en-tête X-Api-Key n'existe que depuis la 2.18.0) ; jamais écrite dans un journal de Gladys, mais un proxy inverse devant Tautulli peut journaliser les URL."
       },
       "placeholder": { "en": "32 characters", "fr": "32 caractères" },
       "required": true
@@ -175,8 +175,8 @@
           "source": "devices",
           "required": false,
           "label": {
-            "en": "Followed user (empty: any user)",
-            "fr": "Utilisateur suivi (vide : tout utilisateur)"
+            "en": "Followed user: pick a \"Plex: <user>\" device (empty: any user)",
+            "fr": "Utilisateur suivi : choisissez un appareil « Plex: <utilisateur> » (vide : tout utilisateur)"
           }
         }
       ],

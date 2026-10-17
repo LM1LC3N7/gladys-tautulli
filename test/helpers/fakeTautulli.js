@@ -85,7 +85,8 @@ export function createFakeTautulli() {
   function answer(url) {
     if (url.pathname !== '/api/v2') return json(404, { message: 'Not found' });
     const cmd = url.searchParams.get('cmd');
-    if (!fake.apiEnabled) return json(200, envelope('error', null, 'API not enabled'));
+    // plexpy/api2.py: API off = 404, key = 401, command failed = 400, exception = 500.
+    if (!fake.apiEnabled) return json(404, envelope('error', null, 'API not enabled'));
     if (url.searchParams.get('apikey') !== API_KEY) {
       return json(401, envelope('error', null, 'Invalid apikey'));
     }
@@ -95,7 +96,8 @@ export function createFakeTautulli() {
       return json(f.status ?? 200, f.body ?? { message: 'failure' }, f.headers ?? {});
     }
     if (cmd === 'get_activity') {
-      if (fake.plexDown) return json(200, envelope('error', null, 'Unable to get PMS activity'));
+      // Plex unreachable: Tautulli answers a success without data.
+      if (fake.plexDown) return json(200, envelope('success', {}));
       const by = (d) => fake.sessions.filter((s) => s.transcode_decision === d).length;
       return json(
         200,
@@ -113,7 +115,7 @@ export function createFakeTautulli() {
       );
     }
     if (cmd === 'get_users') return json(200, envelope('success', fake.users));
-    return json(200, envelope('error', null, 'Unknown command'));
+    return json(400, envelope('error', null, 'Unknown command'));
   }
 
   /** The transport of src/tautulli/http.js, in memory. */

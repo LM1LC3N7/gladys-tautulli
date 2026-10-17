@@ -9,7 +9,7 @@ refused key, the fields of `get_activity` (stream counts, LAN / WAN / total
 bandwidth, sessions) and `get_users`. Nothing of it is installed at runtime
 and no line of it is copied (it is Python, this integration is JavaScript:
 `src/tautulli/client.js`, `src/tautulli/parse.js`). Two of its test fixtures
-are kept as they are in `test/fixtures/` (`get_activity.json`,
+are kept, reformatted (indentation only), in `test/fixtures/` (`get_activity.json`,
 `get_users.json`).
 
 <https://github.com/ludeeus/pytautulli> (read at commit `dd681ac`,

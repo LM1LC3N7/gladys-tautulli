@@ -71,7 +71,7 @@ test('normalizeConfig: defaults, key trimmed and checked, certificate options wi
   assert.equal(normalizeConfig({ certificate_fingerprint: 'nope' }).fingerprintInvalid, true);
   assert.equal(normalizeConfig(null).urlError, 'empty');
   // A key Tautulli never generates: an invisible character, a space, too short.
-  assert.equal(normalizeConfig({ api_key: 'abc​def0123456' }).apiKeyInvalid, true);
+  assert.equal(normalizeConfig({ api_key: 'abc\u200bdef0123456' }).apiKeyInvalid, true);
   assert.equal(normalizeConfig({ api_key: 'abcd efgh 0123' }).apiKeyInvalid, true);
   assert.equal(normalizeConfig({ api_key: 'abc' }).apiKeyInvalid, true);
   assert.equal(normalizeConfig({ url: 'h', allow_self_signed: true }).tlsOverHttp, true);

@@ -23,9 +23,11 @@ Gladys ⇄ SDK ⇄ src/app.js (TautulliApp)
                  └─ src/devices.js            server and user devices (pure)
 ```
 
-- **Authentication**: the API key in the query string (`/api/v2?apikey=…`), as
-  the API of Tautulli requires. No URL, no remote text and never the key in a
-  log or a status; every logged text is redacted. HTTP 401 or "Invalid
+- **Authentication**: the API key in the query string (`/api/v2?apikey=…`),
+  the one method every Tautulli version accepts (the `X-Api-Key` header only
+  since 2.18.0: planned, see TODO.md). No URL, no remote text and never the
+  key in a log or a status; every logged text is redacted (a reverse proxy in
+  front of Tautulli may still log URLs: documented). HTTP 401 or "Invalid
   apikey" is final: a salted HMAC of the address and key is kept in `/data`,
   nothing is sent again until the configuration is saved or "Test the
   connection" is pressed.

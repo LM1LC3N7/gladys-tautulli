@@ -74,10 +74,14 @@ self-signed certificate:
 
 ## Security and privacy
 
-- The API of Tautulli takes the key **in the URL** of each request. The
-  integration never writes a URL, the key nor a message of Tautulli in its
-  logs. Over `http://` the key crosses your network in clear: keep Tautulli on
-  your local network, or use https.
+- The integration sends the key **in the URL** of each request
+  (`?apikey=`): the one method every version of Tautulli accepts (the
+  `X-Api-Key` header exists only since Tautulli 2.18.0; using it is planned).
+  The integration never writes a URL, the key nor a message of Tautulli in its
+  logs, but a **reverse proxy** in front of Tautulli may log the URLs, key
+  included: reach Tautulli directly, or turn off the proxy's access logs for
+  `/api/v2`. Over `http://` the key crosses your network in clear: keep
+  Tautulli on your local network, or use https.
 - The key gives full access to the API of Tautulli (which can also terminate
   streams): the integration only uses `get_activity` and `get_users`.
 - Titles and user names go to Gladys (devices, scene variables): only for the

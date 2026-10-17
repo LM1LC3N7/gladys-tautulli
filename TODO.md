@@ -31,10 +31,18 @@ up to date at the end of every milestone.
 - [ ] **Milestone 2 — real Tautulli** (a tester with Tautulli and Plex):
       record real answers as fixtures (key removed), fix what differs. To
       check first:
-  - the HTTP status and message of a wrong key (401 with "Invalid apikey"?
-    200?), of a missing key, of the API disabled ("API not enabled"?);
-  - `get_activity` when Plex is stopped: `result: error`, an empty `data`,
-    or a success with no session? (all three read as "Plex not read");
+  - the statuses read in plexpy/api2.py (review): 401 for the key
+    ("Invalid apikey", "Parameter apikey is required or X-Api-Key header is
+    required"), 404 for the API off, 400 with `result: error` for a command
+    that failed, 500 for an exception: confirm on a real Tautulli;
+  - `get_activity` when Plex is stopped: `result: error` (HTTP 400?) or an
+    empty `data` (both read as "Plex not read"), or a success with no
+    session (read as 0 streams, Plex reachable: would be wrong);
+  - **the `X-Api-Key` header** (Tautulli >= 2.18.0): send the key in the
+    header first, falling back to the query string when Tautulli answers 401
+    "Parameter apikey is required…" (an older version: that 401 is then NOT
+    a final refusal); avoid 2.17.1 (reported broken); keeps the key out of
+    reverse proxy logs;
   - the types of `stream_count` (text in pytautulli's fixture) and of the
     other counts; the unit of the bandwidths (kbit/s assumed, as shown by
     Tautulli);
@@ -43,9 +51,7 @@ up to date at the end of every milestone.
     another `rating_key`: both handled);
   - `user_id` of the local / managed users; `friendly_name` vs `username`;
   - Tautulli with an HTTP root (`/tautulli`) and behind a reverse proxy;
-    a proxy asking for a login (401: read as a refused key, documented);
-  - whether the API accepts the key in a POST body (it would keep it out of
-    proxy logs).
+    a proxy asking for a login (401: read as a refused key, documented).
 - [ ] **Milestone 3 — more** (not in v1): terminating a stream (a button,
       off by default, per session: the API has `terminate_session`), the
       libraries (`get_libraries`: counts of movies / shows), the history and
@@ -93,7 +99,10 @@ up to date at the end of every milestone.
   transcode (the three add up to the total).
 - **Plex reachable**: derived from `get_activity`, which Tautulli reads live
   from Plex at each call: a success means Plex was read (1); `result: error`
-  or an empty `data` means it was not (0). `server_status` was left out (one
+  (HTTP 200 or 400, the order of the checks is: 401 / key refused, then 429
+  and 5xx as pauses, then an envelope of Tautulli on a 4xx read as "API off"
+  (404) or a failed command, then a bare HTTP error) or an empty `data` means
+  it was not (0). `server_status` was left out (one
   more request, absent from older versions, and the same answer). When Plex
   is not read: the counts keep their last value (not published), the users
   are not published, the status says so, the loop keeps its interval, and
@@ -103,7 +112,10 @@ up to date at the end of every milestone.
   has hundreds). Found by `get_users` (every 10 min, 2 min after a failure,
   at once on a Discovery scan) or by a session of a matching user. A
   `get_users` failure never blocks the activity (lesson of wave 3); its 429
-  pauses every path, after the activity is published.
+  pauses every path, after the activity is published. Only the users
+  followed now get states: a device of a user removed from the filter keeps
+  its last values (review). Readings are serialized (the scan button never
+  runs one in parallel with the loop: no ghost events).
 - **Trigger** `playback`: sessions compared by `session_key` between two
   readings: new -> `started`; playing/buffering -> paused -> `paused`;
   paused -> playing/buffering -> `resumed` (added to the brief's three: a
@@ -128,8 +140,10 @@ up to date at the end of every milestone.
   back), and lifted only by the user (saved configuration, "Test the
   connection"). No retry, error or not, ever comes sooner than the polling
   interval.
-- **Secret in the URL**: the API of Tautulli takes the key only in the query
-  string. The URL is built in `client.js` and handed to the transport only.
+- **Secret in the URL**: the key goes in the query string, the one method
+  every Tautulli version accepts (the `X-Api-Key` header exists only since
+  2.18.0: milestone 2, with a fallback). A reverse proxy in front of Tautulli
+  may log the URL, key included: said in the docs. The URL is built in `client.js` and handed to the transport only.
   Errors are built from fixed texts and short Node codes (never a Node
   message, which may quote the URL); remote messages are only matched against
   the known refusals, never kept; every logged text goes through `redact()`
@@ -145,7 +159,8 @@ up to date at the end of every milestone.
 - **Address**: no scheme: http on 8181 (Tautulli's default); a scheme without
   a port: 80 / 443 like a browser; a path (HTTP root) kept, a trailing
   `/api/v2` dropped; a query (a pasted `?apikey=`) refused.
-- **Republished on every `connected`**: the app restarts, forgets the values
+- **Republished on every `connected`**: the app restarts, sends the
+  connection status again (the core keeps it in memory only), forgets the values
   remembered by `publishChangedStates`, resets the badges, publishes
   Discovery, states and badges again; a refusal and a pause stay.
 - **Rate of states**: change-only (`publishChangedStates`), at most 8 + 2 x 10

@@ -23,7 +23,7 @@ export function cleanText(value, max = LIMITS.TEXT) {
   const text = String(value)
     // Control characters (line breaks included) and the bidirectional overrides.
     // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
