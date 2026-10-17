@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-17
+
 ### Added
 
 - First version, never tested against a real Tautulli: the Plex server
@@ -28,4 +30,5 @@ the notes of the version's GitHub Release.
   use or by a typed SHA-256 fingerprint, checked before the API key is sent.
 - Buttons "Test the connection" and "Trust the new certificate".
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-tautulli/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-tautulli/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-tautulli/releases/tag/v0.1.1
