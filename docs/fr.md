@@ -1,67 +1,110 @@
-# Template de démonstration
+# Tautulli
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Suivez votre serveur **Plex** dans Gladys via **Tautulli** : flux en cours,
+transcodage, bande passante, qui regarde quoi, et des scènes qui démarrent
+quand une lecture démarre, se met en pause, reprend ou s'arrête.
 
-## Ce que vous obtenez
+> **Intégration non officielle**, sans lien avec Tautulli ni Plex. Elle n'a
+> **jamais été testée sur un vrai Tautulli** : elle a été écrite d'après la
+> référence de l'API de Tautulli et la bibliothèque pytautulli. Vos retours
+> sont les bienvenus.
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+L'intégration **ne fait que lire** : elle n'arrête jamais un flux et ne
+change rien dans Tautulli ni dans Plex.
+
+## Prérequis
+
+- Tautulli v2 joignable depuis Gladys (même réseau), avec son API activée.
+- Sa clé d'API : dans Tautulli, **Settings → Web Interface → API**, cochez
+  **Enable API**, puis copiez l'**API key** (32 caractères).
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+1. Installez l'intégration depuis le store.
+2. **Adresse de Tautulli** : `192.168.1.10:8181` (une adresse seule est lue en
+   `http://` sur le port 8181, celui de Tautulli). Avec `http://` ou
+   `https://` et sans port, le port 80 ou 443 est utilisé (Tautulli derrière
+   un proxy inverse ; un chemin comme `/tautulli` est gardé). Ne collez pas
+   `?apikey=…` : la clé a son propre champ.
+3. **Clé d'API** : collez-la. Elle est gardée par Gladys dans sa base (masquée
+   dans l'interface, non chiffrée), jamais réaffichée, et envoyée seulement à
+   Tautulli.
+4. **Utilisateurs à suivre** (facultatif) : noms d'utilisateur Plex, noms
+   affichés ou identifiants, séparés par des virgules (10 au plus). Chacun
+   devient un appareil.
+5. Enregistrez, puis appuyez sur **Tester la connexion**.
+6. Dans l'onglet **Découverte**, créez les appareils voulus.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+## Appareils
 
-## Actions
+**Plex (Tautulli)**, un par intégration :
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+| Fonction                 | Type                    | Signification                                            |
+| ------------------------ | ----------------------- | -------------------------------------------------------- |
+| Streams                  | compteur                | flux en cours                                            |
+| Streams transcoding      | compteur                | flux que Plex transcode                                  |
+| Streams in direct play   | compteur                | flux lus tels quels                                      |
+| Streams in direct stream | compteur                | flux remuxés (conteneur changé seulement)                |
+| Bandwidth, LAN, WAN      | débit, kbit/s           | tel que Tautulli le calcule                              |
+| Plex reachable           | binaire (lecture seule) | 1 : Tautulli a lu l'activité de Plex ; 0 : il n'a pas pu |
 
-## Scènes
+**Plex : <utilisateur>**, un par utilisateur suivi : **Streams** (compteur) et
+**Now playing** (texte : le titre, « (+1) » s'il y en a plusieurs, « — » quand
+rien ne joue).
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+## Déclencheur de scène
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+**Lecture Plex démarrée, en pause, reprise ou arrêtée**, avec deux filtres
+facultatifs : l'événement, et un utilisateur suivi. Les variables `event`,
+`user_name`, `title`, `media_type` et `player` sont utilisables dans les
+actions (un message, par exemple).
 
-## Tableau de bord
+L'activité est lue au rythme choisi (30 s par défaut) : une scène démarre
+jusqu'à un intervalle après l'événement, et une pause ou un arrêt plus court
+que l'intervalle peut passer inaperçu. Rien ne se déclenche pour les flux déjà
+en cours au démarrage de l'intégration ou au retour de Tautulli après une
+panne.
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+## Certificat (https seulement)
 
-## Dépannage
+Par défaut une adresse https exige un certificat d'une autorité reconnue. Pour
+un certificat auto-signé :
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+- cochez **Accepter le certificat auto-signé** : le certificat vu à la
+  première connexion est mémorisé ; la clé d'API part vers celui qui répond à
+  cette première connexion. Un autre certificat ensuite est refusé tant que
+  vous n'appuyez pas sur **Faire confiance au nouveau certificat** ;
+- ou, plus sûr, saisissez son **empreinte SHA-256** :
+  `openssl s_client -connect 192.168.1.10:8181 </dev/null | openssl x509 -noout -fingerprint -sha256`.
+
+## Sécurité et vie privée
+
+- L'API de Tautulli prend la clé **dans l'URL** de chaque requête.
+  L'intégration n'écrit jamais d'URL, la clé ni un message de Tautulli dans
+  ses journaux. En `http://` la clé traverse votre réseau en clair : gardez
+  Tautulli sur votre réseau local, ou utilisez https.
+- La clé donne tout l'accès à l'API de Tautulli (qui sait aussi couper des
+  flux) : l'intégration n'utilise que `get_activity` et `get_users`.
+- Les titres et noms d'utilisateurs vont dans Gladys (appareils, variables de
+  scène) : seulement pour les utilisateurs suivis sur les appareils ; le
+  déclencheur porte le nom de tout utilisateur.
+
+## Erreurs et limites
+
+- **Clé refusée** (fausse ou régénérée) : Gladys s'arrête et ne réessaie
+  jamais seul ; collez la clé actuelle et enregistrez, ou appuyez sur
+  **Tester la connexion**.
+- **API désactivée** : activez-la dans Tautulli ; Gladys réessaie (30 s à
+  10 min).
+- **HTTP 429 ou erreur serveur (5xx)** : toutes les requêtes sont suspendues
+  (1 min à 6 h, `Retry-After` respecté), même après un redémarrage ;
+  **Tester la connexion** lève la pause.
+- Tautulli injoignable : nouvel essai après 30 s, doublé jusqu'à 10 min,
+  jamais plus tôt que l'intervalle choisi.
+- **Plex non lu** (Plex arrêté ou injoignable depuis Tautulli) : « Plex
+  reachable » passe à 0, les autres chiffres gardent leur dernière valeur.
+- La liste des utilisateurs est lue toutes les 10 minutes (2 minutes après un
+  échec) ; un utilisateur suivi qui lance une lecture est trouvé aussitôt.
+- Un Tautulli par intégration ; 10 utilisateurs suivis au plus.
+- Pas dans cette version : couper un flux, les bibliothèques, l'historique et
+  les statistiques de Tautulli.
