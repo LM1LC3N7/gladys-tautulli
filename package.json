@@ -1,6 +1,6 @@
 {
   "name": "gladys-tautulli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Gladys Assistant external integration for Tautulli: Plex streams, transcoding, bandwidth and playback triggers, read only, through the API of Tautulli. Unofficial, not affiliated with Tautulli nor Plex.",
   "type": "module",
